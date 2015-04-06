@@ -1,5 +1,5 @@
 import math
-import mysql.connector
+import mbdb
 import re
 import time
 
@@ -10,28 +10,15 @@ Small script to convert ss convo logs to sqlite3 sentence generator database
 
 def main():
     FILENAME = "session.log"
-    conn = mysql.connector.connect(user='root', password='*',
-        host='127.0.0.1')
-    c = conn.cursor(prepared=True)
-    c.execute("CREATE DATABASE IF NOT EXISTS markovsbot")
-    # c.execute("USE markovsbot") not supported...
+    db = mbdb.MBDatabase('*', '*', '127.0.0.1')
+    db.create_schema()
     
-    c.execute("CREATE TABLE IF NOT EXISTS markovsbot.player_names (id INT PRIMARY KEY AUTO_INCREMENT NOT NULL, name CHAR(24) NOT NULL, INDEX name_i (name)) ENGINE=INNODB")
-    c.execute("CREATE TABLE IF NOT EXISTS markovsbot.words (id INT PRIMARY KEY AUTO_INCREMENT NOT NULL, word CHAR(32) NOT NULL, INDEX word_i (word)) ENGINE=INNODB")
-
-    c.execute("CREATE TABLE IF NOT EXISTS markovsbot.conversations (id INT PRIMARY KEY AUTO_INCREMENT NOT NULL, name_id INT NOT NULL, word_a INT NOT NULL, word_b INT NOT NULL, is_starting TINYINT NOT NULL, "
-        "FOREIGN KEY word_a_fk (word_a) REFERENCES words (id) ON DELETE CASCADE ON UPDATE RESTRICT,"
-        "FOREIGN KEY word_b_fk (word_b) REFERENCES words (id) ON DELETE CASCADE ON UPDATE RESTRICT,"
-        "FOREIGN KEY name_fk (name_id) REFERENCES player_names (id) ON DELETE CASCADE ON UPDATE RESTRICT,"
-        "INDEX name_i (name_id), INDEX wa_i (word_a)) ENGINE=INNODB")
-
+    c = db.new_connection()    
     f = open(FILENAME)
     lines = f.readlines()
 
     rgx = re.compile(r"^\s+([^<].+?)> ([^\?].*?)$")
-    lengths = []
-    index = 0
-    n_statements_per_commit = 2
+    lengths = []    
     wordsToId = {}
     playersToId = {}
     current_player_id = 1
@@ -55,7 +42,7 @@ def main():
         except KeyError:
             current_player_id += 1            
             playersToId[name] = player_id            
-            c.execute("INSERT INTO markovsbot.player_names (id,name) VALUES (?,?)", (player_id, name))                
+            c.insert_player_row(player_id, name)
         
         starting = 1
         for i_w in range(len(arr_words) - 1):
@@ -74,7 +61,7 @@ def main():
             except KeyError:                
                 current_word_id += 1
                 wordsToId[word_a] = word_a_id
-                c.execute("INSERT INTO markovsbot.words (id,word) VALUES (?,?)", (word_a_id, word_a))            
+                c.insert_word_row(word_a_id, word_a)
             
             word_b_id = current_word_id
             try:
@@ -82,20 +69,12 @@ def main():
             except KeyError:                
                 current_word_id += 1
                 wordsToId[word_b] = word_b_id
-                c.execute("INSERT INTO markovsbot.words (id,word) VALUES (?,?)", (word_b_id, word_b))                        
+                c.insert_word_row(word_b_id, word_b)
 
-            c.execute("INSERT INTO markovsbot.conversations (name_id, word_a, word_b, is_starting) VALUES (?,?,?,?)", (player_id, word_a_id, word_b_id, starting))
-            starting = 0
-
-            if n_statements_per_commit == index:
-                index = 0
-                conn.commit()
-            index += 1                            
+            c.insert_conv_row(player_id, word_a_id, word_b_id, starting)
+            starting = 0              
     
-    conn.commit()
-    c.close()
-    conn.close()
-        
+    c.close()      
     
 main()
     

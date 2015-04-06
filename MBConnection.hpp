@@ -15,7 +15,14 @@ public:
   void open();
   void close();
 
-  void 
+  void createDatabase();
+  void createTables();
+  void createPreparedStatements();
+
+  // TODO type correctness
+  void insertPlayerRow(long id, const std::string& name);  
+  void insertWordRow(long id, const std::string& word);
+  void insertConvRow(long playerId, long wordId1, long wordId2, int isStarting);
 
   int getId() const { return this->_id; }  
 private:
@@ -24,6 +31,10 @@ private:
   std::string _user;
   std::string _password;
   std::string _host;
+
+  MYSQL_STMT* _insPlayerRowStatement;
+  MYSQL_STMT* _insWordRowStatement;
+  MYSQL_STMT* _insConvRowStatement;
 };
 
 #endif

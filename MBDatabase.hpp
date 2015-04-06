@@ -9,10 +9,8 @@
 class MBDatabase
 {
 public:
-  MBDatabase(std::string user, std::string password, std::string host)
-   : _user(std::move(user)), _password(std::move(password)), _host(std::move(host)) {}
-  
-  MBConnection newConnection();   
+  MBDatabase(const std::string& user, const std::string& password, const std::string& host);  
+  MBConnection newConnection();     
 
 private:
   std::string _user;
