@@ -1,7 +1,7 @@
-from __future__ import division
 import math
+import mysql.connector
 import re
-import sqlite3
+import time
 
 '''
 Python 2.7
@@ -10,45 +10,52 @@ Small script to convert ss convo logs to sqlite3 sentence generator database
 
 def main():
     FILENAME = "session.log"
-    conn = sqlite3.connect("connos.db")
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS player_names (id INTEGER PRIMARY KEY, name CHAR(64) NOT NULL UNIQUE)")
-    c.execute("CREATE TABLE IF NOT EXISTS words (id INTEGER PRIMARY KEY, word CHAR(32) NOT NULL UNIQUE)")
-    # TODO foreign keys unavailable?
-    c.execute("CREATE TABLE IF NOT EXISTS conversations (name_id INTEGER NOT NULL, word_a INTEGER NOT NULL, word_b INTEGER NOT NULL, is_starting INTEGER NOT NULL)")
-    c.execute("CREATE INDEX name_p_i ON player_names(name)")
-    c.execute("CREATE INDEX word_i ON words(word)")
-    c.execute("CREATE INDEX name_i ON conversations(name_id)")
-    c.execute("CREATE INDEX wa_i ON conversations(word_a)")
-    c.execute("CREATE INDEX wb_i ON conversations(word_b)")    
+    conn = mysql.connector.connect(user='root', password='*',
+        host='127.0.0.1')
+    c = conn.cursor(prepared=True)
+    c.execute("CREATE DATABASE IF NOT EXISTS markovsbot")
+    # c.execute("USE markovsbot") not supported...
     
-    conn.commit()    
+    c.execute("CREATE TABLE IF NOT EXISTS markovsbot.player_names (id INT PRIMARY KEY AUTO_INCREMENT NOT NULL, name CHAR(24) NOT NULL, INDEX name_i (name)) ENGINE=INNODB")
+    c.execute("CREATE TABLE IF NOT EXISTS markovsbot.words (id INT PRIMARY KEY AUTO_INCREMENT NOT NULL, word CHAR(32) NOT NULL, INDEX word_i (word)) ENGINE=INNODB")
+
+    c.execute("CREATE TABLE IF NOT EXISTS markovsbot.conversations (id INT PRIMARY KEY AUTO_INCREMENT NOT NULL, name_id INT NOT NULL, word_a INT NOT NULL, word_b INT NOT NULL, is_starting TINYINT NOT NULL, "
+        "FOREIGN KEY word_a_fk (word_a) REFERENCES words (id) ON DELETE CASCADE ON UPDATE RESTRICT,"
+        "FOREIGN KEY word_b_fk (word_b) REFERENCES words (id) ON DELETE CASCADE ON UPDATE RESTRICT,"
+        "FOREIGN KEY name_fk (name_id) REFERENCES player_names (id) ON DELETE CASCADE ON UPDATE RESTRICT,"
+        "INDEX name_i (name_id), INDEX wa_i (word_a)) ENGINE=INNODB")
 
     f = open(FILENAME)
     lines = f.readlines()
 
     rgx = re.compile(r"^\s+([^<].+?)> ([^\?].*?)$")
-    index = 0
     lengths = []
-    
-    for l in lines:
+    index = 0
+    n_statements_per_commit = 2
+    wordsToId = {}
+    playersToId = {}
+    current_player_id = 1
+    current_word_id = 1
+
+    for l in lines:         
         if l[0] != " ":
             continue
         match = rgx.match(l)
         if not match:
             continue
 
-        name = match.group(1).decode("ascii", "ignore")
-        blurb = match.group(2).decode("ascii", "ignore")
+        name = str(match.group(1).decode("ascii", "ignore"))
+        blurb = str(match.group(2).decode("ascii", "ignore"))
 
-        arr_words = blurb.split(' ')
-
-        c.execute("SELECT id FROM player_names WHERE name=?", (name,))
-        row = c.fetchone()
-        if not row:
-          c.execute("INSERT INTO player_names (name) VALUES (?)", (name,))            
-        c.execute("SELECT id FROM player_names WHERE name=?", (name,))
-        player_id = c.fetchone()[0]       
+        arr_words = blurb.split(' ')        
+                
+        player_id = current_player_id 
+        try:
+            player_id = playersToId[name]
+        except KeyError:
+            current_player_id += 1            
+            playersToId[name] = player_id            
+            c.execute("INSERT INTO markovsbot.player_names (id,name) VALUES (?,?)", (player_id, name))                
         
         starting = 1
         for i_w in range(len(arr_words) - 1):
@@ -58,30 +65,35 @@ def main():
                 word_b = arr_words[i_w + 1]
 
             if len(word_a) > 32 or len(word_b) > 32:
-              continue
-                
-            c.execute("SELECT id FROM words WHERE word=?", (word_a,))
-            row = c.fetchone()
-            if not row:
-              c.execute("INSERT INTO words (word) VALUES (?)", (word_a,))
-            c.execute("SELECT id FROM words WHERE word=?", (word_a,))  
-            word_a_id = c.fetchone()[0]
-
-            c.execute("SELECT id FROM words WHERE word=?", (word_b,))
-            row = c.fetchone()
-            if not row:
-              c.execute("INSERT INTO words (word) VALUES (?)", (word_b,))
-            c.execute("SELECT id FROM words WHERE word=?", (word_b,))  
-            word_b_id = c.fetchone()[0]
-            c.execute("INSERT INTO conversations (name_id, word_a, word_b, is_starting) VALUES (?,?,?,?)", (player_id, word_a_id, word_b_id, starting))
+              continue                
                         
-            if index == 200000:                
-                conn.commit()
-                index = 0
+
+            word_a_id = current_word_id
+            try:
+                word_a_id = wordsToId[word_a]
+            except KeyError:                
+                current_word_id += 1
+                wordsToId[word_a] = word_a_id
+                c.execute("INSERT INTO markovsbot.words (id,word) VALUES (?,?)", (word_a_id, word_a))            
+            
+            word_b_id = current_word_id
+            try:
+                word_b_id = wordsToId[word_b]
+            except KeyError:                
+                current_word_id += 1
+                wordsToId[word_b] = word_b_id
+                c.execute("INSERT INTO markovsbot.words (id,word) VALUES (?,?)", (word_b_id, word_b))                        
+
+            c.execute("INSERT INTO markovsbot.conversations (name_id, word_a, word_b, is_starting) VALUES (?,?,?,?)", (player_id, word_a_id, word_b_id, starting))
             starting = 0
-            index += 1
+
+            if n_statements_per_commit == index:
+                index = 0
+                conn.commit()
+            index += 1                            
     
     conn.commit()
+    c.close()
     conn.close()
         
     
