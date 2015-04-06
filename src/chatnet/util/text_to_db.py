@@ -5,7 +5,7 @@ import time
 
 '''
 Python 2.7
-Small script to convert ss convo logs to sqlite3 sentence generator database
+Small script to convert ss convo logs to MySQL sentence generator database
 '''
 
 def main():
