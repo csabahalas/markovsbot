@@ -1,6 +1,7 @@
 #ifndef _MB_CONNECTION_HPP_
 #define _MB_CONNECTION_HPP_
 
+#include <boost/python/tuple.hpp>
 #include <mysql.h>
 #include <string>
 
@@ -20,11 +21,17 @@ public:
   void createPreparedStatements();
 
   // TODO type correctness
-  void insertPlayerRow(long id, const std::string& name);  
+  void insertPlayerRow(long id, const std::string& name);
   void insertWordRow(long id, const std::string& word);
   void insertConvRow(long playerId, long wordId1, long wordId2, int isStarting);
 
-  int getId() const { return this->_id; }  
+  boost::python::tuple getRandomStartingWord(const std::string& name);
+  boost::python::tuple getRandomNextWord(const std::string& name, long wordId);
+
+  std::string getProperCase(const std::string& name);
+
+
+  int getId() const { return this->_id; }
 private:
   MYSQL* _conn;
   int _id;
@@ -35,6 +42,9 @@ private:
   MYSQL_STMT* _insPlayerRowStatement;
   MYSQL_STMT* _insWordRowStatement;
   MYSQL_STMT* _insConvRowStatement;
+  MYSQL_STMT* _getRandomStartingWordStatement;
+  MYSQL_STMT* _getRandomNextWordStatement;
+  MYSQL_STMT* _getProperCaseStatement;
 };
 
 #endif

@@ -19,6 +19,9 @@ class ChatnetConnection(object):
   def send_priv(self, target, message):
     self.send("SEND:PRIV:%s:%s\n" % (target, message))
 
+  def send_freq(self, freq, message):
+    self.send("SEND:FREQ:%s:%s\n" % (freq, message))
+
   def connect(self):
     try:
       self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -219,7 +222,7 @@ class ChatnetConnectionHandler(object):
             map(lambda handler: handler(parser.parse(message)),
                 self.typesToHandlers[ChatnetMessages.type_of(message)])
           except Exception, e:
-            print e
+            continue
 
 def printing_handler(data):
   data = data.groups()
@@ -228,3 +231,5 @@ def printing_handler(data):
 def create_parser(pType):
   if pType == ChatnetMessages.PRIVATE:
     return ChatnetMessageParser(ChatnetMessages.PRIVATE, "^MSG:PRIV:(?P<name>.+?):(?P<message>.+)$")
+  elif pType == ChatnetMessages.FREQ:
+    return ChatnetMessageParser(ChatnetMessages.FREQ, "^MSG:FREQ:(?P<name>.+?):(?P<message>.+)$")

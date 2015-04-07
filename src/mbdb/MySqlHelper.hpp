@@ -37,4 +37,23 @@ constexpr static inline void setBindValue(MYSQL_BIND* bind, char& value)
   bind[COLUMN_NO].is_null = 0;    
 }
 
+template <int COLUMN_NO>
+constexpr static inline void setBindValue(MYSQL_BIND* bind, char* value, unsigned int len)
+{
+  bind[COLUMN_NO].buffer_type = MYSQL_TYPE_STRING;
+  bind[COLUMN_NO].buffer = value;
+  bind[COLUMN_NO].buffer_length = len;
+  bind[COLUMN_NO].is_null = 0;
+}
+/*
+template <int COLUMN_NO>
+constexpr static inline void setBindFetchValue(MYSQL_BIND* bind, char* value, unsigned long int& len)
+{
+  bind[COLUMN_NO].buffer_type = MYSQL_TYPE_STRING;
+  bind[COLUMN_NO].buffer = value;
+  bind[COLUMN_NO].buffer_length = len;
+  bind[COLUMN_NO].is_null = 0;
+  bind[COLUMN_NO].length = &len;
+}*/
+
 #endif

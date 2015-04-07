@@ -1,15 +1,21 @@
+#include <boost/python/tuple.hpp>
+#include <cstring>
 #include <iostream>
 #include <mysql.h>
-#include <cstring>
 #include "MBConnection.hpp"
 #include "MySqlHelper.hpp"
+
+using namespace boost::python;
 
 MBConnection::MBConnection(const std::string& user, 
   const std::string& password, 
   const std::string& host) : _conn(0), _user(user), _password(password), _host(host), 
   _insPlayerRowStatement(0),
   _insWordRowStatement(0),
-  _insConvRowStatement(0)
+  _insConvRowStatement(0),
+  _getRandomStartingWordStatement(0),
+  _getRandomNextWordStatement(0),
+  _getProperCaseStatement(0)
 {
   static int id = 0;
   this->_id = id++;
@@ -33,8 +39,16 @@ void MBConnection::createPreparedStatements()
   this->_insPlayerRowStatement = mysql_stmt_init(this->_conn);
   this->_insWordRowStatement = mysql_stmt_init(this->_conn);
   this->_insConvRowStatement = mysql_stmt_init(this->_conn);
+  this->_getRandomStartingWordStatement = mysql_stmt_init(this->_conn);
+  this->_getRandomNextWordStatement = mysql_stmt_init(this->_conn);
+  this->_getProperCaseStatement = mysql_stmt_init(this->_conn);
 
-  if (!this->_insPlayerRowStatement || !this->_insWordRowStatement || !this->_insConvRowStatement)
+  if (!this->_insPlayerRowStatement || 
+    !this->_insWordRowStatement || 
+    !this->_insConvRowStatement ||
+    !this->_getRandomStartingWordStatement ||
+    !this->_getRandomNextWordStatement ||
+    !this->_getProperCaseStatement)
   {
     std::cout << "Initializating prepared statements failed" << std::endl;
     throw 0;
@@ -44,13 +58,34 @@ void MBConnection::createPreparedStatements()
   static const std::string INSERT_WORD_ROW_SQL("INSERT INTO markovsbot.words (id,word) VALUES (?,?)");
   static const std::string INSERT_CONV_ROW_SQL("INSERT INTO markovsbot.conversations (name_id, word_a, word_b, is_starting) VALUES (?,?,?,?)");
 
+  static const std::string GET_RANDOM_STARTING_WORD_SQL("SELECT markovsbot.words.id, markovsbot.words.word FROM ("
+    "(SELECT markovsbot.conversations.word_a FROM markovsbot.player_names INNER JOIN markovsbot.conversations "
+      "ON markovsbot.player_names.id=markovsbot.conversations.name_id "
+      "WHERE markovsbot.player_names.name=? AND markovsbot.conversations.is_starting=1) "
+    "AS t1) "
+    "INNER JOIN markovsbot.words ON markovsbot.words.id=t1.word_a ORDER BY RAND() LIMIT 1");
+
+  static const std::string GET_RANDOM_NEXT_WORD_SQL("SELECT markovsbot.words.id, markovsbot.words.word FROM ("
+    "(SELECT markovsbot.conversations.word_b FROM markovsbot.player_names INNER JOIN markovsbot.conversations "
+      "ON markovsbot.player_names.id=markovsbot.conversations.name_id "
+      "WHERE markovsbot.player_names.name=? AND markovsbot.conversations.word_a=?) "
+    "AS t1) "
+    "INNER JOIN markovsbot.words ON markovsbot.words.id=t1.word_b ORDER BY RAND() LIMIT 1");
+
+  static const std::string GET_PROPER_CASE_SQL("SELECT markovsbot.player_names.name FROM markovsbot.player_names WHERE name=? LIMIT 1");
+
   int r1 = mysql_stmt_prepare(this->_insPlayerRowStatement, INSERT_PLAYER_ROW_SQL.c_str(), INSERT_PLAYER_ROW_SQL.length());
   int r2 = mysql_stmt_prepare(this->_insWordRowStatement, INSERT_WORD_ROW_SQL.c_str(), INSERT_WORD_ROW_SQL.length());
   int r3 = mysql_stmt_prepare(this->_insConvRowStatement, INSERT_CONV_ROW_SQL.c_str(), INSERT_CONV_ROW_SQL.length());
 
-  if (r1 || r2 || r3)
+  int r4 = mysql_stmt_prepare(this->_getRandomStartingWordStatement, GET_RANDOM_STARTING_WORD_SQL.c_str(), GET_RANDOM_STARTING_WORD_SQL.length());
+  int r5 = mysql_stmt_prepare(this->_getRandomNextWordStatement, GET_RANDOM_NEXT_WORD_SQL.c_str(), GET_RANDOM_NEXT_WORD_SQL.length());
+
+  int r6 = mysql_stmt_prepare(this->_getProperCaseStatement, GET_PROPER_CASE_SQL.c_str(), GET_PROPER_CASE_SQL.length());
+
+  if (r1 || r2 || r3 || r4 || r5 || r6)
   {
-    std::cout << "Creating prepared statements failed" << std::endl;
+    std::cout << "Creating prepared statements failed. Error " << mysql_stmt_error(this->_getRandomNextWordStatement) << std::endl;
     throw 0;
   }
 }
@@ -67,6 +102,16 @@ void MBConnection::close()
 
     if (this->_insConvRowStatement)
       mysql_stmt_close(this->_insConvRowStatement);
+
+    if (this->_getProperCaseStatement)
+      mysql_stmt_close(this->_getProperCaseStatement);
+
+    if (this->_getRandomNextWordStatement)
+      mysql_stmt_close(this->_getRandomNextWordStatement);
+
+    if (this->_getRandomStartingWordStatement)
+      mysql_stmt_close(this->_getRandomStartingWordStatement);
+    
     mysql_close(this->_conn);
   }
 }
@@ -170,4 +215,115 @@ void MBConnection::insertConvRow(long playerId, long wordId1, long wordId2, int 
   }
 }
 
-////////////////////////
+tuple MBConnection::getRandomStartingWord(const std::string& name)
+{  
+  MYSQL_BIND param[1];
+  memset(param, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(param, name);  
+
+  long id;
+  char word[32] = {0};  
+  MYSQL_BIND result[2];
+  memset(result, 0, 2 * sizeof(MYSQL_BIND));
+  setBindValue<0>(result, id);
+  setBindValue<1>(result, word, 32);
+
+  if (mysql_stmt_bind_param(this->_getRandomStartingWordStatement, param))
+  {
+    std::cout << "Binding parameters to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_bind_result(this->_getRandomStartingWordStatement, result))
+  {
+    std::cout << "Binding result to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_execute(this->_getRandomStartingWordStatement))
+  {
+    std::cout << "Executing select from random starting word failed" << std::endl;
+    throw 0;
+  }
+  
+  mysql_stmt_store_result(this->_getRandomStartingWordStatement);  
+  if (mysql_stmt_fetch(this->_getRandomStartingWordStatement)) 
+    return make_tuple();
+
+  return make_tuple(id, word);
+}
+
+tuple MBConnection::getRandomNextWord(const std::string& name, long wordId)
+{
+  MYSQL_BIND param[2];
+  memset(param, 0, 2 * sizeof(MYSQL_BIND));
+  setBindValue<0>(param, name);
+  setBindValue<1>(param, wordId);
+
+  long id;
+  char word[32] = {0};
+  MYSQL_BIND result[2];
+  memset(result, 0, 2 * sizeof(MYSQL_BIND));
+  setBindValue<0>(result, id);
+  setBindValue<1>(result, word, 32);
+
+  if (mysql_stmt_bind_param(this->_getRandomNextWordStatement, param))
+  {
+    std::cout << "Binding parameters to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_bind_result(this->_getRandomNextWordStatement, result))
+  {
+    std::cout << "Binding result to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_execute(this->_getRandomNextWordStatement))
+  {
+    std::cout << "Executing select from random next word failed" << mysql_stmt_error(this->_getRandomNextWordStatement) << std::endl;
+    throw 0;
+  }
+
+  mysql_stmt_store_result(this->_getRandomNextWordStatement);
+  if (mysql_stmt_fetch(this->_getRandomNextWordStatement)) 
+    return make_tuple();
+
+  return make_tuple(id, word);
+}
+
+std::string MBConnection::getProperCase(const std::string& name)
+{
+  MYSQL_BIND param[1];
+  memset(param, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(param, name);  
+  
+  char playerName[24] = {0};
+  MYSQL_BIND result[1];
+  memset(result, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(result, playerName, 24);
+
+  if (mysql_stmt_bind_param(this->_getProperCaseStatement, param))
+  {
+    std::cout << "Binding parameters to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_bind_result(this->_getProperCaseStatement, result))
+  {
+    std::cout << "Binding result to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_execute(this->_getProperCaseStatement))
+  {
+    std::cout << "Executing select from proper case statement failed" << mysql_stmt_error(this->_getProperCaseStatement) << std::endl;
+    throw 0;
+  }
+
+  mysql_stmt_store_result(this->_getProperCaseStatement);
+  if (mysql_stmt_fetch(this->_getProperCaseStatement)) 
+    return "";
+
+  return playerName;
+}
