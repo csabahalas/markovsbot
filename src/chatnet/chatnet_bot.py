@@ -1,5 +1,7 @@
+from __future__ import division
 import chatnet
 import mbdb
+import operator
 import re
 import time
 
@@ -20,7 +22,7 @@ class Command(object):
   def on_command(self, data):
     m = self.pattern.match(data.groupdict()["message"])
     if m:
-      self.run_command(data.groupdict(), m.groups())        
+      self.run_command(data.groupdict(), m.groups())
 
 class OwnerCommand(Command):
   def __init__(self, bot):
@@ -92,6 +94,40 @@ class SayCommand(Command):
     c.close()
     print sentence
     self.bot.get_conn().send_freq("1337", sentence)
+
+class WhoSaidCommand(Command):
+  def __init__(self, bot):
+    Command.__init__(self, "whosaid", 1, bot, chatnet.ChatnetMessages.FREQ)    
+  
+  def run_command(self, data, args):
+    db = mbdb.MBDatabase("*", "*", "127.0.0.1")
+    c = db.new_connection()
+
+    player_data = {}
+    words = args[0].split(' ')
+    for i in range(0, len(words)):
+      word_a = words[i]
+      word_b = ""
+      if i + 1 < len(words):
+        word_b = words[i + 1]
+
+      bigram_data = c.get_bigram_count(word_a, word_b)
+      print bigram_data
+
+      tot_count = 0
+      for (k, v) in bigram_data:
+        tot_count += c.get_player_line_count(k)        
+      
+      for (player_id, n_lines) in bigram_data:
+        line_count = c.get_player_line_count(player_id)
+        try:
+          player_data[player_id] *= (n_lines / line_count) * (n_lines / tot_count) * (line_count / 6900000) * 10000000000
+        except KeyError:
+          player_data[player_id] = (n_lines / line_count) * (n_lines / tot_count) * (line_count / 6900000) * 10000000000
+    
+    max_player_id = max(player_data.iteritems(), key=operator.itemgetter(1))[0]
+    max_name = c.get_player_name(max_player_id)
+    self.bot.get_conn().send_freq("1337", "%s said %s" % (max_name, args[0]))
    
 
 class Bot(object):
@@ -112,7 +148,7 @@ class Bot(object):
   def run(self):
     self.conn.connect()
     self.conn.login("UB-Dr Brain", "ralphtango")
-    self.conn.gotoArena("0")
+    self.conn.gotoArena("")
     self.connHandler.run()
 
   def stop(self):
@@ -127,6 +163,7 @@ def main():
     bot.addCommand(ShutdownCommand(bot, ["nn", "ceiu", "cdb-man", "b.o.x.", "noldec"]))
     bot.addCommand(HelpCommand(bot, "PM or message in team chat: !say name, !whosaid message"))
     bot.addCommand(SayCommand(bot))
+    bot.addCommand(WhoSaidCommand(bot))
     bot.run()  
   finally:
     bot.stop()

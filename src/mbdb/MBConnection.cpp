@@ -15,7 +15,10 @@ MBConnection::MBConnection(const std::string& user,
   _insConvRowStatement(0),
   _getRandomStartingWordStatement(0),
   _getRandomNextWordStatement(0),
-  _getProperCaseStatement(0)
+  _getProperCaseStatement(0),
+  _getBigramCountStatement(0),
+  _getPlayerLineCountStatement(0),
+  _getPlayerNameStatement(0)
 {
   static int id = 0;
   this->_id = id++;
@@ -42,13 +45,19 @@ void MBConnection::createPreparedStatements()
   this->_getRandomStartingWordStatement = mysql_stmt_init(this->_conn);
   this->_getRandomNextWordStatement = mysql_stmt_init(this->_conn);
   this->_getProperCaseStatement = mysql_stmt_init(this->_conn);
+  this->_getBigramCountStatement = mysql_stmt_init(this->_conn);  
+  this->_getPlayerLineCountStatement = mysql_stmt_init(this->_conn);
+  this->_getPlayerNameStatement = mysql_stmt_init(this->_conn);
 
   if (!this->_insPlayerRowStatement || 
     !this->_insWordRowStatement || 
     !this->_insConvRowStatement ||
     !this->_getRandomStartingWordStatement ||
     !this->_getRandomNextWordStatement ||
-    !this->_getProperCaseStatement)
+    !this->_getProperCaseStatement ||
+    !this->_getBigramCountStatement ||
+    !this->_getPlayerLineCountStatement ||
+    !this->_getPlayerNameStatement)
   {
     std::cout << "Initializating prepared statements failed" << std::endl;
     throw 0;
@@ -73,6 +82,11 @@ void MBConnection::createPreparedStatements()
     "INNER JOIN markovsbot.words ON markovsbot.words.id=t1.word_b ORDER BY RAND() LIMIT 1");
 
   static const std::string GET_PROPER_CASE_SQL("SELECT markovsbot.player_names.name FROM markovsbot.player_names WHERE name=? LIMIT 1");
+  static const std::string GET_BIGRAM_COUNT_SQL("SELECT name_id, COUNT(*) AS line_count FROM markovsbot.conversations WHERE word_a=("
+      "SELECT id FROM markovsbot.words WHERE word=? LIMIT 1"
+    ") AND word_b=(SELECT id FROM markovsbot.words WHERE word=? LIMIT 1) GROUP BY name_id ORDER BY line_count DESC LIMIT 50");
+  static const std::string GET_PLAYER_LINE_COUNT_SQL("SELECT COUNT(*) FROM markovsbot.conversations WHERE name_id=? GROUP BY name_id");
+  static const std::string GET_PLAYER_NAME_SQL("SELECT name FROM markovsbot.player_names WHERE id=?");
 
   int r1 = mysql_stmt_prepare(this->_insPlayerRowStatement, INSERT_PLAYER_ROW_SQL.c_str(), INSERT_PLAYER_ROW_SQL.length());
   int r2 = mysql_stmt_prepare(this->_insWordRowStatement, INSERT_WORD_ROW_SQL.c_str(), INSERT_WORD_ROW_SQL.length());
@@ -82,10 +96,13 @@ void MBConnection::createPreparedStatements()
   int r5 = mysql_stmt_prepare(this->_getRandomNextWordStatement, GET_RANDOM_NEXT_WORD_SQL.c_str(), GET_RANDOM_NEXT_WORD_SQL.length());
 
   int r6 = mysql_stmt_prepare(this->_getProperCaseStatement, GET_PROPER_CASE_SQL.c_str(), GET_PROPER_CASE_SQL.length());
+  int r7 = mysql_stmt_prepare(this->_getBigramCountStatement, GET_BIGRAM_COUNT_SQL.c_str(), GET_BIGRAM_COUNT_SQL.length());
+  int r8 = mysql_stmt_prepare(this->_getPlayerLineCountStatement, GET_PLAYER_LINE_COUNT_SQL.c_str(), GET_PLAYER_LINE_COUNT_SQL.length());
+  int r9 = mysql_stmt_prepare(this->_getPlayerNameStatement, GET_PLAYER_NAME_SQL.c_str(), GET_PLAYER_NAME_SQL.length());
 
-  if (r1 || r2 || r3 || r4 || r5 || r6)
+  if (r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 || r9)
   {
-    std::cout << "Creating prepared statements failed. Error " << mysql_stmt_error(this->_getRandomNextWordStatement) << std::endl;
+    std::cout << "Creating prepared statements failed" << std::endl;
     throw 0;
   }
 }
@@ -111,6 +128,15 @@ void MBConnection::close()
 
     if (this->_getRandomStartingWordStatement)
       mysql_stmt_close(this->_getRandomStartingWordStatement);
+
+    if (this->_getBigramCountStatement)
+      mysql_stmt_close(this->_getBigramCountStatement);
+
+    if (this->_getPlayerLineCountStatement)
+      mysql_stmt_close(this->_getPlayerLineCountStatement);
+
+    if (this->_getPlayerNameStatement)
+      mysql_stmt_close(this->_getPlayerNameStatement);
     
     mysql_close(this->_conn);
   }
@@ -323,6 +349,119 @@ std::string MBConnection::getProperCase(const std::string& name)
 
   mysql_stmt_store_result(this->_getProperCaseStatement);
   if (mysql_stmt_fetch(this->_getProperCaseStatement)) 
+    return "";
+
+  return playerName;
+}
+
+TupleList MBConnection::getBigramCount(const std::string& word1, const std::string& word2)
+{
+  MYSQL_BIND param[2];
+  memset(param, 0, 2 * sizeof(MYSQL_BIND));
+  setBindValue<0>(param, word1);  
+  setBindValue<1>(param, word2);
+  
+  long nameId;
+  long lineCount;
+  MYSQL_BIND result[2];
+  memset(result, 0, 2 * sizeof(MYSQL_BIND));
+  setBindValue<0>(result, nameId);
+  setBindValue<1>(result, lineCount);
+
+  if (mysql_stmt_bind_param(this->_getBigramCountStatement, param))
+  {
+    std::cout << "Binding parameters to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_bind_result(this->_getBigramCountStatement, result))
+  {
+    std::cout << "Binding result to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_execute(this->_getBigramCountStatement))
+  {
+    std::cout << "Executing select from bigram count failed" << mysql_stmt_error(this->_getBigramCountStatement) << std::endl;
+    throw 0;
+  }
+
+  mysql_stmt_store_result(this->_getBigramCountStatement);
+  TupleList resultSet;
+
+  while (!mysql_stmt_fetch(this->_getBigramCountStatement)) 
+    resultSet.push_back(make_tuple(static_cast<int>(nameId), static_cast<int>(lineCount)));
+
+  return resultSet;
+}
+
+int MBConnection::getPlayerLineCount(long playerId)
+{
+  MYSQL_BIND param[1];
+  memset(param, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(param, playerId);  
+  
+  long lineCount;
+  MYSQL_BIND result[1];
+  memset(result, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(result, lineCount);
+
+  if (mysql_stmt_bind_param(this->_getPlayerLineCountStatement, param))
+  {
+    std::cout << "Binding parameters to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_bind_result(this->_getPlayerLineCountStatement, result))
+  {
+    std::cout << "Binding result to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_execute(this->_getPlayerLineCountStatement))
+  {
+    std::cout << "Executing select from player line count statement failed" << mysql_stmt_error(this->_getPlayerLineCountStatement) << std::endl;
+    throw 0;
+  }
+
+  mysql_stmt_store_result(this->_getPlayerLineCountStatement);
+  if (mysql_stmt_fetch(this->_getPlayerLineCountStatement)) 
+    return 0;
+
+  return lineCount;
+}
+
+std::string MBConnection::getPlayerName(long playerId)
+{
+  MYSQL_BIND param[1];
+  memset(param, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(param, playerId);  
+  
+  char playerName[24] = {0};
+  MYSQL_BIND result[1];
+  memset(result, 0, sizeof(MYSQL_BIND));
+  setBindValue<0>(result, playerName, 24);
+
+  if (mysql_stmt_bind_param(this->_getPlayerNameStatement, param))
+  {
+    std::cout << "Binding parameters to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_bind_result(this->_getPlayerNameStatement, result))
+  {
+    std::cout << "Binding result to prepared statement failed" << std::endl;
+    throw 0;
+  }
+
+  if (mysql_stmt_execute(this->_getPlayerNameStatement))
+  {
+    std::cout << "Executing select from proper case statement failed" << mysql_stmt_error(this->_getPlayerNameStatement) << std::endl;
+    throw 0;
+  }
+
+  mysql_stmt_store_result(this->_getPlayerNameStatement);
+  if (mysql_stmt_fetch(this->_getPlayerNameStatement)) 
     return "";
 
   return playerName;

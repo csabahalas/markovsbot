@@ -5,6 +5,8 @@
 #include <mysql.h>
 #include <string>
 
+typedef std::vector<boost::python::tuple> TupleList;
+
 class MBConnection
 {
 public:
@@ -29,7 +31,9 @@ public:
   boost::python::tuple getRandomNextWord(const std::string& name, long wordId);
 
   std::string getProperCase(const std::string& name);
-
+  TupleList getBigramCount(const std::string& word1, const std::string& word2);
+  int getPlayerLineCount(long playerId);
+  std::string getPlayerName(long playerId);
 
   int getId() const { return this->_id; }
 private:
@@ -45,6 +49,9 @@ private:
   MYSQL_STMT* _getRandomStartingWordStatement;
   MYSQL_STMT* _getRandomNextWordStatement;
   MYSQL_STMT* _getProperCaseStatement;
+  MYSQL_STMT* _getBigramCountStatement;
+  MYSQL_STMT* _getPlayerLineCountStatement;
+  MYSQL_STMT* _getPlayerNameStatement;
 };
 
 #endif
