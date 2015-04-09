@@ -57,6 +57,9 @@ class ChatnetConnection(object):
 
   def gotoArena(self, arena):
     self.send("GO:%s\n" % (arena))
+  
+  def send_cmd(self, cmd):
+    self.send("SEND:CMD:%s\n" % cmd)
 
 class ChatnetIoTask(object):
   def __init__(self, sock, conn):

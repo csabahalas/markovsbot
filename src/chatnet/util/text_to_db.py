@@ -5,14 +5,13 @@ import time
 
 '''
 Python 2.7
-Small script to convert ss convo logs to MySQL sentence generator database
+Small script to convert ss convo logs to sqlite3 sentence generator database
 '''
 
 def main():
     FILENAME = "session.log"
     db = mbdb.MBDatabase('*', '*', '127.0.0.1')
-    db.create_schema()
-    
+        
     c = db.new_connection()    
     f = open(FILENAME)
     lines = f.readlines()
