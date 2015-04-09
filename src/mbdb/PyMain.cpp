@@ -21,11 +21,8 @@ BOOST_PYTHON_MODULE(mbdb)
     .def("get_bigram_count", &MBConnection::getBigramCount)
     .def("get_player_line_count", &MBConnection::getPlayerLineCount)
     .def("get_player_name", &MBConnection::getPlayerName)
-<<<<<<< HEAD
     .def("log_chat", &MBConnection::log)
     .def("get_rand_message", &MBConnection::getRandomChatMessage)
-=======
->>>>>>> origin/master
     .def("close", &MBConnection::close);
 
   class_<MBDatabase>("MBDatabase", init<std::string, std::string, std::string>())

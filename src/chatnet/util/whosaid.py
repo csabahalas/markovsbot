@@ -3,7 +3,7 @@ import mbdb
 import operator
 import sys
 
-db = mbdb.MBDatabase("*", "*", "127.0.0.1")
+db = mbdb.MBDatabase('*', '*', "127.0.0.1")
 c = db.new_connection()
 
 player_data = {}

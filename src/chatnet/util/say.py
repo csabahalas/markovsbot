@@ -1,7 +1,7 @@
 import mbdb
 import sys
 
-db = mbdb.MBDatabase("*", "*", "127.0.0.1")
+db = mbdb.MBDatabase('*', '*', "127.0.0.1")
 c = db.new_connection()
 arg_name = sys.argv[1][:10]
 
