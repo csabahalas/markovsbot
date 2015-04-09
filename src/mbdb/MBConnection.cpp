@@ -18,9 +18,13 @@ MBConnection::MBConnection(const std::string& user,
   _getProperCaseStatement(0),
   _getBigramCountStatement(0),
   _getPlayerLineCountStatement(0),
+<<<<<<< HEAD
   _getPlayerNameStatement(0),
   _insTextRowStatement(0),
   _getRandomChatMessageStatement(0)
+=======
+  _getPlayerNameStatement(0)
+>>>>>>> origin/master
 {
   static int id = 0;
   this->_id = id++;
@@ -50,8 +54,11 @@ void MBConnection::createPreparedStatements()
   this->_getBigramCountStatement = mysql_stmt_init(this->_conn);  
   this->_getPlayerLineCountStatement = mysql_stmt_init(this->_conn);
   this->_getPlayerNameStatement = mysql_stmt_init(this->_conn);
+<<<<<<< HEAD
   this->_insTextRowStatement = mysql_stmt_init(this->_conn);
   this->_getRandomChatMessageStatement = mysql_stmt_init(this->_conn);
+=======
+>>>>>>> origin/master
 
   if (!this->_insPlayerRowStatement || 
     !this->_insWordRowStatement || 
@@ -61,9 +68,13 @@ void MBConnection::createPreparedStatements()
     !this->_getProperCaseStatement ||
     !this->_getBigramCountStatement ||
     !this->_getPlayerLineCountStatement ||
+<<<<<<< HEAD
     !this->_getPlayerNameStatement ||
     !this->_insTextRowStatement ||
     !this->_getRandomChatMessageStatement)
+=======
+    !this->_getPlayerNameStatement)
+>>>>>>> origin/master
   {
     std::cout << "Initializating prepared statements failed" << std::endl;
     throw 0;
@@ -88,6 +99,7 @@ void MBConnection::createPreparedStatements()
     "INNER JOIN markovsbot.words ON markovsbot.words.id=t1.word_b ORDER BY RAND() LIMIT 1");
 
   static const std::string GET_PROPER_CASE_SQL("SELECT markovsbot.player_names.name FROM markovsbot.player_names WHERE name=? LIMIT 1");
+<<<<<<< HEAD
   static const std::string GET_BIGRAM_COUNT_SQL("SELECT name_id, COUNT(*) AS c FROM ("
       "SELECT * FROM markovsbot.words WHERE word=?"
     ") AS t1, ("
@@ -98,6 +110,13 @@ void MBConnection::createPreparedStatements()
   static const std::string GET_PLAYER_NAME_SQL("SELECT name FROM markovsbot.player_names WHERE id=?");
   static const std::string INSERT_TEXT_SQL("INSERT INTO markovsbot.fulltext_log (name, `text`) VALUES (?, ?)");
   static const std::string GET_RANDOM_CHAT_MESSAGE_SQL("SELECT `name`,`text` FROM markovsbot.fulltext_log WHERE MATCH(`text`) AGAINST (CONCAT('\"', ?, '\"') IN BOOLEAN MODE) ORDER BY RAND() DESC LIMIT 1");
+=======
+  static const std::string GET_BIGRAM_COUNT_SQL("SELECT name_id, COUNT(*) AS line_count FROM markovsbot.conversations WHERE word_a=("
+      "SELECT id FROM markovsbot.words WHERE word=? LIMIT 1"
+    ") AND word_b=(SELECT id FROM markovsbot.words WHERE word=? LIMIT 1) GROUP BY name_id ORDER BY line_count DESC LIMIT 50");
+  static const std::string GET_PLAYER_LINE_COUNT_SQL("SELECT COUNT(*) FROM markovsbot.conversations WHERE name_id=? GROUP BY name_id");
+  static const std::string GET_PLAYER_NAME_SQL("SELECT name FROM markovsbot.player_names WHERE id=?");
+>>>>>>> origin/master
 
   int r1 = mysql_stmt_prepare(this->_insPlayerRowStatement, INSERT_PLAYER_ROW_SQL.c_str(), INSERT_PLAYER_ROW_SQL.length());
   int r2 = mysql_stmt_prepare(this->_insWordRowStatement, INSERT_WORD_ROW_SQL.c_str(), INSERT_WORD_ROW_SQL.length());
@@ -111,10 +130,14 @@ void MBConnection::createPreparedStatements()
   int r8 = mysql_stmt_prepare(this->_getPlayerLineCountStatement, GET_PLAYER_LINE_COUNT_SQL.c_str(), GET_PLAYER_LINE_COUNT_SQL.length());
   int r9 = mysql_stmt_prepare(this->_getPlayerNameStatement, GET_PLAYER_NAME_SQL.c_str(), GET_PLAYER_NAME_SQL.length());
 
+<<<<<<< HEAD
   int r10 = mysql_stmt_prepare(this->_insTextRowStatement, INSERT_TEXT_SQL.c_str(), INSERT_TEXT_SQL.length());
   int r11 = mysql_stmt_prepare(this->_getRandomChatMessageStatement, GET_RANDOM_CHAT_MESSAGE_SQL.c_str(), GET_RANDOM_CHAT_MESSAGE_SQL.length());
 
   if (r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 || r9 || r10 || r11)
+=======
+  if (r1 || r2 || r3 || r4 || r5 || r6 || r7 || r8 || r9)
+>>>>>>> origin/master
   {
     std::cout << "Creating prepared statements failed" << std::endl;
     throw 0;
@@ -151,12 +174,15 @@ void MBConnection::close()
 
     if (this->_getPlayerNameStatement)
       mysql_stmt_close(this->_getPlayerNameStatement);
+<<<<<<< HEAD
 
     if (this->_insTextRowStatement)
       mysql_stmt_close(this->_insTextRowStatement);
 
     if (this->_getRandomChatMessageStatement)
       mysql_stmt_close(this->_getRandomChatMessageStatement);
+=======
+>>>>>>> origin/master
     
     mysql_close(this->_conn);
   }
@@ -488,6 +514,7 @@ std::string MBConnection::getPlayerName(long playerId)
     return "";
 
   return playerName;
+<<<<<<< HEAD
 }
 
 void MBConnection::log(const std::string& name, const std::string& message)
@@ -553,4 +580,6 @@ std::string MBConnection::getRandomChatMessage(const std::string& substring)
     return "";
 
   return std::string(playerName) + "> " + message;
+=======
+>>>>>>> origin/master
 }

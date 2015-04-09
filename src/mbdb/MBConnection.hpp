@@ -7,7 +7,10 @@
 
 typedef std::vector<boost::python::tuple> TupleList;
 
+<<<<<<< HEAD
 // TODO refactor
+=======
+>>>>>>> origin/master
 class MBConnection
 {
 public:
@@ -35,9 +38,12 @@ public:
   TupleList getBigramCount(const std::string& word1, const std::string& word2);
   int getPlayerLineCount(long playerId);
   std::string getPlayerName(long playerId);
+<<<<<<< HEAD
 
   void log(const std::string& name, const std::string& text);
   std::string getRandomChatMessage(const std::string& substring);
+=======
+>>>>>>> origin/master
 
   int getId() const { return this->_id; }
 private:
@@ -56,8 +62,11 @@ private:
   MYSQL_STMT* _getBigramCountStatement;
   MYSQL_STMT* _getPlayerLineCountStatement;
   MYSQL_STMT* _getPlayerNameStatement;
+<<<<<<< HEAD
   MYSQL_STMT* _insTextRowStatement;
   MYSQL_STMT* _getRandomChatMessageStatement;
+=======
+>>>>>>> origin/master
 };
 
 #endif
